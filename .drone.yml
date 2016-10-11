@@ -1,0 +1,15 @@
+build:
+  image: alpine:3.1
+  commands:
+    - echo -- Installing requirement --
+    - apk add --update python py-pip zip
+    - pip install -r requirements.txt
+    - echo -- Running unit tests --
+    - nosetests tests/unit/
+    - echo -- Performing cleanup --
+    - rm -f *.pyc
+    - find app/ -type f -name '*.pyc' -delete
+    - echo -- Building Lambda package --
+    - pip install -r requirements.txt -t .
+    - touch google/__init__.py
+    - zip lambda.zip * -r

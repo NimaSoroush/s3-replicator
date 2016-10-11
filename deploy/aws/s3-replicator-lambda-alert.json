@@ -1,0 +1,119 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Sitemap Builder lambda function alarms",
+    "Parameters": {
+        "LambdaFunctionName": {
+            "Type": "String",
+            "Default": "slingshot-sitemap-builder-function",
+            "Description": "Name (Not ARN) of Lambda function to monitor"
+        },
+        "NotificationsRecipient": {
+            "Type": "String",,
+            "Description": "E-mail of alarm notifications recipient"
+        },
+        "DurationThreshold": {
+            "Type": "Number",
+            "Default": "270000",
+            "Description": "Number of milliseconds from which duration alarm triggers"
+        },
+        "ErrorsThreshold": {
+            "Type": "Number",
+            "Default": "3",
+            "Description": "Number of errors required to trigger alarm"
+        },
+        "ErrorsDuration": {
+            "Type": "Number",
+            "Default": "2400",
+            "Description": "Number of seconds during which errors alarm is monitored"
+        }
+    },
+    "Resources": {
+        "lambdaNotificationsTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "Subscription": [
+                    {
+                        "Endpoint": { "Ref" : "NotificationsRecipient" },
+                        "Protocol": "email"
+                    }
+                ],
+                "DisplayName": "sitemap-builder-alarms"
+            }
+        },
+        "lambdaNotificationsTopicPolicy":{
+            "Type": "AWS::SNS::TopicPolicy",
+            "DependsOn": "lambdaNotificationsTopic",
+            "Properties": {
+                "Topics": [ { "Ref": "lambdaNotificationsTopic" } ],
+                "PolicyDocument": {
+                  "Version": "2008-10-17",
+                  "Id": "__default_policy_ID",
+                  "Statement": [
+                    {
+                      "Sid": "__default_statement_ID",
+                      "Effect": "Allow",
+                      "Principal": {
+                        "AWS": "*"
+                      },
+                      "Action": [
+                        "SNS:Publish",
+                        "SNS:RemovePermission",
+                        "SNS:SetTopicAttributes",
+                        "SNS:DeleteTopic",
+                        "SNS:ListSubscriptionsByTopic",
+                        "SNS:GetTopicAttributes",
+                        "SNS:Receive",
+                        "SNS:AddPermission",
+                        "SNS:Subscribe"
+                      ],
+                      "Resource": { "Ref": "lambdaNotificationsTopic" },
+                      "Condition": {
+                        "StringEquals": {
+                          "AWS:SourceOwner": {"Ref" : "AWS::AccountId"}
+                        }
+                      }
+                    }
+                  ]
+                }
+            }
+        },
+        "lambdaDurationAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DependsOn": "lambdaNotificationsTopic",
+            "Properties": {
+                "AlarmDescription" : "Too long function execution",
+                "AlarmActions" : [ { "Ref": "lambdaNotificationsTopic" } ],
+                "MetricName" : "Duration",
+                "Namespace" : "AWS/Lambda",
+                "Statistic" : "Maximum",
+                "Period" : "60",
+                "EvaluationPeriods" : "1",
+                "Threshold" : { "Ref" : "DurationThreshold" },
+                "ComparisonOperator" : "GreaterThanThreshold",
+                "Dimensions" : [ {
+                  "Name" : "FunctionName",
+                  "Value" : { "Ref" : "LambdaFunctionName" }
+                } ]
+            }
+        },
+        "lambdaErrorsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DependsOn": "lambdaNotificationsTopic",
+            "Properties": {
+                "AlarmDescription" : "Too many function execution errors",
+                "AlarmActions" : [ { "Ref": "lambdaNotificationsTopic" } ],
+                "MetricName" : "Errors",
+                "Namespace" : "AWS/Lambda",
+                "Statistic" : "Sum",
+                "Period" : { "Ref" : "ErrorsDuration" },
+                "EvaluationPeriods" : "1",
+                "Threshold" : { "Ref" : "ErrorsThreshold" },
+                "ComparisonOperator" : "GreaterThanThreshold",
+                "Dimensions" : [ {
+                  "Name" : "FunctionName",
+                  "Value" : { "Ref" : "LambdaFunctionName" }
+                } ]
+            }
+        }
+    }
+}
